@@ -36,7 +36,6 @@ spec:
   - hosts:
     - do.argo.run
     secretName: do
-  ingressClassName: nginx
   rules:
     - host: do.argo.run
       http:
