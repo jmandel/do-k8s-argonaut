@@ -1,0 +1,138 @@
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  namespace: cert-manager
+  name: letsencrypt-nginx
+spec:
+  # ACME issuer configuration
+  # `email` - the email address to be associated with the ACME account (make sure it's a valid one)
+  # `server` - the URL used to access the ACME server’s directory endpoint
+  # `privateKeySecretRef` - Kubernetes Secret to store the automatically generated ACME account private key
+  acme:
+    email: argonaut@dilute.net
+    server: https://acme-v02.api.letsencrypt.org/directory
+    privateKeySecretRef:
+      name: letsencrypt-nginx-private-key
+    solvers:
+      # Use the HTTP-01 challenge provider
+      - http01:
+          ingress:
+            class: nginx
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: testing
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ingress-echo
+  namespace: testing
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-nginx
+spec:
+  tls:
+  - hosts:
+    - do.argo.run
+    secretName: do
+  ingressClassName: nginx
+  rules:
+    - host: do.argo.run
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: simple-webapp-service
+                port:
+                  number: 80
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: testing
+  name: simple-webapp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: simple-webapp
+  template:
+    metadata:
+      labels:
+        app: simple-webapp
+    spec:
+      containers:
+      - name: simple-webapp
+        image: nginx:latest
+        ports:
+        - containerPort: 80
+        volumeMounts:
+        - name: index-html
+          mountPath: /usr/share/nginx/html/
+      volumes:
+      - name: index-html
+        configMap:
+          name: index-html-configmap
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: testing
+  name: simple-webapp-service
+spec:
+  selector:
+    app: simple-webapp
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  namespace: testing
+  name: index-html-configmap
+data:
+  index.html: |
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Welcome to My Custom Web App</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                height: 100vh;
+                margin: 0;
+                background-color: #f0f0f0;
+            }
+            .container {
+                text-align: center;
+                padding: 20px;
+                background-color: white;
+                border-radius: 10px;
+                box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            }
+            h1 {
+                color: #333;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>Welcome to My Custom Web App</h1>
+            <p>This is a simple web page served by Nginx in Kubernetes.</p>
+        </div>
+    </body>
+    </html>
+---
+
